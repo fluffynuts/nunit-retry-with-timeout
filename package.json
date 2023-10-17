@@ -5,12 +5,13 @@
   "scripts": {
     "test": "zarro test-dotnet",
     "release": "zarro release-nuget",
+    "pack": "zarro @",
     "release-beta": "cross-env BETA=1 zarro release-nuget"
   },
   "keywords": [],
   "author": "",
   "license": "BSD-3-Clause",
   "devDependencies": {
-    "zarro": "^1.145.4"
+    "zarro": "^1.145.12"
   }
 }
