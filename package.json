@@ -1,0 +1,16 @@
+{
+  "name": "nunit-retry-with-timeout",
+  "version": "1.0.0",
+  "description": "Provides a test decorator, `[RetryWithTimeout(...)]` which allows retrying tests with per-test \r and overall timeouts, working around a common problem with `[Retry(...)]` and `[Timeout(...)]`\r being on the same test.",
+  "scripts": {
+    "test": "zarro test-dotnet",
+    "release": "zarro release-nuget",
+    "release-beta": "cross-env BETA=1 zarro release-nuget"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "BSD-3-Clause",
+  "devDependencies": {
+    "zarro": "^1.145.4"
+  }
+}

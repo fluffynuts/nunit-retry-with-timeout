@@ -1,15 +1,29 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
     <RootNamespace>NUnit</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <PackageVersion>1.0.0</PackageVersion>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <PackageProjectUrl>https://github.com/fluffynuts/nunit-retry-with-timeout</PackageProjectUrl>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <Copyright>Copyright 2023</Copyright>
+    <Authors>
+      Davyd McColl
+    </Authors>
+    <Description>
+      Provides a test decorator, `[RetryWithTimeout(...)]` which allows retrying tests with per-test
+      and overall timeouts, working around a common problem with `[Retry(...)]` and `[Timeout(...)]`
+      being on the same test. See the project repo for more information.
+    </Description>
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="NUnit" Version="3.13.3" />
+    <PackageReference Include="NUnit" Version="3.13.3"/>
   </ItemGroup>
-
 </Project>

@@ -9,6 +9,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NUnitRetryWithTimeout.Consu
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NUnitRetryWithTimeout.Tests", "NUnitRetryWithTimeout.Tests\NUnitRetryWithTimeout.Tests.csproj", "{098EE8B3-A239-4DC5-9B2B-0B4ED8A9F962}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".config", ".config", "{D9774676-CD47-411F-BCEE-A8EF69BFC0C3}"
+	ProjectSection(SolutionItems) = preProject
+		X:\opensource\nunit-retry-with-timeout\package.json = X:\opensource\nunit-retry-with-timeout\package.json
+		X:\opensource\nunit-retry-with-timeout\README.md = X:\opensource\nunit-retry-with-timeout\README.md
+		X:\opensource\nunit-retry-with-timeout\.zarro-defaults = X:\opensource\nunit-retry-with-timeout\.zarro-defaults
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

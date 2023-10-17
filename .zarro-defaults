@@ -1,0 +1,12 @@
+# zarro defaults file:
+# place one VARIABLE=VALUE per line below
+# variables here will not override existing environment variables
+#   unless prepended with a bang, ie
+#     !VARIABLE=Value
+#   so this means anything you set in your package.json, eg with
+#   cross-env, will override what's in here unless you've specifically
+#   marked the setting in here as forced with !
+DOTNET_CORE=1
+PACK_INCLUDE_CSPROJ=NUnitRetryWithTimeout
+PACK_INCLUDE_SYMBOLS=true
+PACK_INCLUDE_SOURCE=true

@@ -9,12 +9,37 @@ using NUnit.Framework.Internal.Commands;
 
 namespace NUnit;
 
+/// <summary>
+/// Decoration to apply to NUnit tests which allow
+/// for retrying the test with a per-attempt timeout
+/// and an optional overall timeout
+/// </summary>
 public class RetryWithTimeout : NUnitAttribute, IRepeatTest
 {
+    /// <summary>
+    /// How many times to retry the test on _any_ exception
+    /// </summary>
     public int Retries { get; }
+    /// <summary>
+    /// Maximum amount of time to wait for any individual
+    /// execution of this test to succeed
+    /// </summary>
     public int TestTimeoutMilliseconds { get; }
+    /// <summary>
+    /// (Optional) Maximum amount of time to wait for
+    /// any attempt to succeed overall. If not specified, this
+    /// is assumed to be {retries} * {test timeout}
+    /// </summary>
     public int OverallTimeoutMilliseconds { get; }
 
+    /// <summary>
+    /// Specifies that the test should be retried up
+    /// to the specified number of times, with a time
+    /// limit per retry and an optional overall time limit
+    /// </summary>
+    /// <param name="retries"></param>
+    /// <param name="testTimeoutMilliseconds"></param>
+    /// <param name="overallTimeoutMilliseconds"></param>
     public RetryWithTimeout(
         int retries,
         int testTimeoutMilliseconds,
@@ -29,6 +54,7 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
             : (retries * testTimeoutMilliseconds) + (500 * retries);
     }
 
+    /// <inheritdoc />
     public TestCommand Wrap(TestCommand command)
     {
         return new RetryWithTimeoutCommand(
@@ -70,27 +96,16 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
 
             while (count-- > 0)
             {
-                // try
-                // {
-                //     context.CurrentResult = innerCommand.Execute(context);
-                // }
-                // // Commands are supposed to catch exceptions, but some don't
-                // // and we want to look at restructuring the API in the future.
-                // catch (Exception ex)
-                // {
-                //     context.CurrentResult ??= context.CurrentTest.MakeTestResult();
-                //     context.CurrentResult.RecordException(ex);
-                // }
-                // finally
-                // {
-                // }
-
+                var thisTimeout = (int)Math.Min(
+                    _testTimeoutMilliSeconds,
+                    _overallTimeoutMilliSeconds - overallStopwatch.Elapsed.TotalMilliseconds
+                );
                 overallStopwatch.Start();
                 var ex = Run.UntilAnyCompletes(
                     () => context.CurrentResult = innerCommand.Execute(context),
                     () =>
                     {
-                        Thread.Sleep(_testTimeoutMilliSeconds);
+                        Thread.Sleep(thisTimeout);
                         throw new TimeoutException(
                             $"{context.CurrentTest.Name} exceeded execution time of {TimeSpan.FromMilliseconds(_testTimeoutMilliSeconds)}"
                         );
@@ -99,21 +114,14 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
                 overallStopwatch.Stop();
                 if (ex is not null)
                 {
-                    context.CurrentResult.RecordException(ex);
+                    if (!CheckIfTimedOutOverall())
+                    {
+                        context.CurrentResult.RecordException(ex);
+                    }
                 }
 
                 if (context.CurrentResult.ResultState.Status != ResultState.Failure.Status)
                 {
-                    break;
-                }
-
-                if (overallStopwatch.Elapsed.TotalMilliseconds >= _overallTimeoutMilliSeconds)
-                {
-                    context.CurrentResult.RecordException(
-                        new TimeoutException(
-                            $"{context.CurrentTest.Name} exceeded overall max execution time of {TimeSpan.FromMilliseconds(_overallTimeoutMilliSeconds)} after {_tryCount - count} attempts"
-                        )
-                    );
                     break;
                 }
 
@@ -125,7 +133,26 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
                 }
             }
 
+            Console.Error.WriteLine($"Total test time: {overallStopwatch.Elapsed}");
+            CheckIfTimedOutOverall();
+
             return context.CurrentResult;
+
+            bool CheckIfTimedOutOverall()
+            {
+                if (overallStopwatch.Elapsed.TotalMilliseconds >= _overallTimeoutMilliSeconds)
+                {
+                    context.CurrentResult = context.CurrentTest.MakeTestResult();
+                    context.CurrentResult.RecordException(
+                        new TimeoutException(
+                            $"{context.CurrentTest.Name} exceeded overall max execution time of {TimeSpan.FromMilliseconds(_overallTimeoutMilliSeconds)} after {_tryCount - count} attempts"
+                        )
+                    );
+                    return true;
+                }
+
+                return false;
+            }
         }
     }
 

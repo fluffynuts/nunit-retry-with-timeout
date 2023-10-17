@@ -53,7 +53,7 @@ public class Tests
         Assert.Pass("yay");
     }
 
-    [RetryWithTimeout(5, 500, 2000)]
+    [RetryWithTimeout(5, 500, 2100)]
     [Test]
     public void ShouldEventuallyFailDueToOverallTimeout()
     {
@@ -63,6 +63,10 @@ public class Tests
         if (_failDueToOverallTimeoutAttempt < 5)
         {
             Thread.Sleep(1000);
+        }
+        else
+        {
+            Thread.Sleep(400); // should not time out by itself, but overall test timeout should kick in
         }
 
         // Assert

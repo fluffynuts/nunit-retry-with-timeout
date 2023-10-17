@@ -15,6 +15,7 @@ public class Tests
     [OneTimeSetUp]
     public void OneTimeSetup()
     {
+        Console.Error.WriteLine("Running consumer tests & recording output, please wait");
         var consumer = FindConsumerProject();
         using var io = ProcessIO.Start(
             "dotnet",
@@ -60,15 +61,11 @@ public class Tests
         Expect(StdOut)
             .To.Contain.Exactly(1)
             .Matched.By(
-                s =>
-                {
-                    var trimmed = s.Trim();
-                    return trimmed.Contains("passed", StringComparison.OrdinalIgnoreCase) &&
-                        trimmed.Contains(
-                            nameof(ConsumerTests.ShouldEventuallyPassWhenSometimesSlow),
-                            StringComparison.OrdinalIgnoreCase
-                        );
-                }
+                s => s.ContainsInOrder(
+                    StringComparison.OrdinalIgnoreCase,
+                    "passed",
+                    nameof(ConsumerTests.ShouldEventuallyPassWhenSometimesSlow)
+                )
             );
         // Assert
     }
@@ -78,9 +75,49 @@ public class Tests
     {
         // Arrange
         // Act
-                    
+        Expect(StdOut)
+            .To.Contain.Exactly(1)
+            .Matched.By(
+                s => s.ContainsInOrder(
+                    StringComparison.OrdinalIgnoreCase,
+                    "passed",
+                    nameof(ConsumerTests.ShouldEventuallyPassWhenSometimesThrows)
+                )
+            );
         // Assert
     }
-    
-    
+
+    [Test]
+    public void ShouldFailWhenRetriesExceededAfterIndividualTimeouts()
+    {
+        // Arrange
+        // Act
+        Expect(StdOut)
+            .To.Contain.Exactly(1)
+            .Matched.By(
+                s => s.ContainsInOrder(
+                    StringComparison.OrdinalIgnoreCase,
+                    "failed",
+                    nameof(ConsumerTests.ShouldEventuallyFailDueToTestTimeout)
+                )
+            );
+        // Assert
+    }
+
+    [Test]
+    public void ShouldFailWhenOverallTimeoutExceeded()
+    {
+        // Arrange
+        // Act
+        Expect(StdOut)
+            .To.Contain.Exactly(1)
+            .Matched.By(
+                s => s.ContainsInOrder(
+                    StringComparison.OrdinalIgnoreCase,
+                    "failed",
+                    nameof(ConsumerTests.ShouldEventuallyFailDueToOverallTimeout)
+                )
+            );
+        // Assert
+    }
 }
