@@ -1,11 +1,14 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal;
 using NUnit.Framework.Internal.Commands;
+using ThreadState = System.Threading.ThreadState;
 
 namespace NUnit;
 
@@ -20,11 +23,13 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
     /// How many times to retry the test on _any_ exception
     /// </summary>
     public int Retries { get; }
+
     /// <summary>
     /// Maximum amount of time to wait for any individual
     /// execution of this test to succeed
     /// </summary>
     public int TestTimeoutMilliseconds { get; }
+
     /// <summary>
     /// (Optional) Maximum amount of time to wait for
     /// any attempt to succeed overall. If not specified, this
@@ -91,18 +96,29 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
         /// <returns>A TestResult</returns>
         public override TestResult Execute(TestExecutionContext context)
         {
+            var setOverallTimeout = false;
             var count = _tryCount;
             var overallStopwatch = new Stopwatch();
+            Exception lastException = null;
+            context.TestCaseTimeout = _overallTimeoutMilliSeconds;
 
             while (count-- > 0)
             {
-                var thisTimeout = (int)Math.Min(
+                var thisTimeout = (int) Math.Min(
                     _testTimeoutMilliSeconds,
                     _overallTimeoutMilliSeconds - overallStopwatch.Elapsed.TotalMilliseconds
                 );
                 overallStopwatch.Start();
                 var ex = Run.UntilAnyCompletes(
-                    () => context.CurrentResult = innerCommand.Execute(context),
+                    () =>
+                    {
+                        if (CheckIfTimedOutOverall())
+                        {
+                            return;
+                        }
+
+                        context.CurrentResult = innerCommand.Execute(context);
+                    },
                     () =>
                     {
                         Thread.Sleep(thisTimeout);
@@ -112,15 +128,8 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
                     }
                 );
                 overallStopwatch.Stop();
-                if (ex is not null)
-                {
-                    if (!CheckIfTimedOutOverall())
-                    {
-                        context.CurrentResult.RecordException(ex);
-                    }
-                }
-
-                if (context.CurrentResult.ResultState.Status != ResultState.Failure.Status)
+                lastException = ex;
+                if (CheckIfTimedOutOverall())
                 {
                     break;
                 }
@@ -128,30 +137,57 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
                 // Clear result for retry
                 if (count > 0)
                 {
-                    context.CurrentResult = context.CurrentTest.MakeTestResult();
+                    context.CurrentResult ??= context.CurrentTest.MakeTestResult();
                     context.CurrentRepeatCount++; // increment Retry count for next iteration. will only happen if we are guaranteed another iteration
                 }
             }
 
-            Console.Error.WriteLine($"Total test time: {overallStopwatch.Elapsed}");
+            Log($"Total test time: {overallStopwatch.Elapsed}");
             CheckIfTimedOutOverall();
+            Log("after overall timeout check");
+            if (lastException is not null && TestHasNotFailed())
+            {
+                Log("recording last exception");
+                context.CurrentResult.RecordException(lastException);
+            }
 
+            Log("-> leaving RetryWithTimeout logic");
             return context.CurrentResult;
+
+            bool TestHasNotFailed()
+            {
+                return context.CurrentResult?.ResultState?.Status != ResultState.Failure.Status;
+            }
 
             bool CheckIfTimedOutOverall()
             {
+                if (setOverallTimeout)
+                {
+                    return true;
+                }
+
                 if (overallStopwatch.Elapsed.TotalMilliseconds >= _overallTimeoutMilliSeconds)
                 {
-                    context.CurrentResult = context.CurrentTest.MakeTestResult();
+                    Log("overall timeout exceeded");
                     context.CurrentResult.RecordException(
                         new TimeoutException(
                             $"{context.CurrentTest.Name} exceeded overall max execution time of {TimeSpan.FromMilliseconds(_overallTimeoutMilliSeconds)} after {_tryCount - count} attempts"
                         )
                     );
+                    setOverallTimeout = true;
+                    Log("-> done setting overall timeout failure");
                     return true;
                 }
 
+                Log("-> test did not time out overall");
                 return false;
+            }
+
+            void Log(string str)
+            {
+                Console.Error.WriteLine(
+                    $"[attr: {context.CurrentTest.Name}] ({_tryCount - count} / {_tryCount}) :: {str}"
+                );
             }
         }
     }
@@ -162,40 +198,78 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
             params Action[] actions
         )
         {
+            if (actions.Length < 2)
+            {
+                if (actions.Any())
+                {
+                    try
+                    {
+                        actions[0].Invoke();
+                    }
+                    catch (Exception ex)
+                    {
+                        return ex;
+                    }
+                }
+
+                return null;
+            }
+
             var lck = new object();
             var ev = new ManualResetEventSlim();
             var result = null as Exception;
-            var cancellationTokenSource = new CancellationTokenSource();
+            var threads = new List<Thread>();
+            var barrier = new Barrier(actions.Length + 1);
             foreach (var action in actions)
             {
-                Task.Run(
-                    () =>
-                    {
-                        try
+                threads.Add(
+                    new Thread(
+                        () =>
                         {
-                            action();
-                            ev.Set();
-                        }
-                        catch (Exception ex)
-                        {
-                            lock (lck)
+                            barrier.SignalAndWait();
+                            try
                             {
-                                if (result is null)
-                                {
-                                    result = ex;
-                                }
-
+                                action();
                                 ev.Set();
                             }
+                            catch (Exception ex)
+                            {
+                                lock (lck)
+                                {
+                                    if (result is null)
+                                    {
+                                        result = ex;
+                                    }
+
+                                    ev.Set();
+                                }
+                            }
                         }
-                    },
-                    cancellationTokenSource.Token
+                    ).Started()
                 );
             }
-
+            barrier.SignalAndWait();
             ev.Wait();
-            cancellationTokenSource.Cancel();
+            foreach (var t in threads)
+            {
+                t.Join();
+            }
+
             return result;
         }
+    }
+}
+
+internal static class ThreadExtensions
+{
+    internal static Thread Started(
+        this Thread thread
+    )
+    {
+        if (thread.ThreadState == ThreadState.Unstarted)
+        {
+            thread.Start();
+        }
+        return thread;
     }
 }
