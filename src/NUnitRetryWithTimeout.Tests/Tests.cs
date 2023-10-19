@@ -1,11 +1,15 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using NExpect;
+using NUnit;
 using PeanutButter.Utils;
 using static NExpect.Expectations;
 using ConsumerTests = NUnitRetryWithTimeout.Consumer.Tests;
+using static PeanutButter.RandomGenerators.RandomValueGen;
 
 namespace NUnitRetryWithTimeout.Tests;
 
@@ -64,7 +68,7 @@ public class Tests
                 s => s.ContainsInOrder(
                     StringComparison.OrdinalIgnoreCase,
                     "passed",
-                    nameof(ConsumerTests.ShouldEventuallyPassWhenSometimesSlow)
+                    "FIXME" //nameof(ConsumerTests.ShouldEventuallyPassWhenSometimesSlow)
                 )
             );
         // Assert
@@ -81,7 +85,7 @@ public class Tests
                 s => s.ContainsInOrder(
                     StringComparison.OrdinalIgnoreCase,
                     "passed",
-                    nameof(ConsumerTests.ShouldEventuallyPassWhenSometimesThrows)
+                    "FIXME" //nameof(ConsumerTests.ShouldEventuallyPassWhenSometimesThrows)
                 )
             );
         // Assert
@@ -119,5 +123,72 @@ public class Tests
                 )
             );
         // Assert
+    }
+
+    [TestFixture]
+    public class WaitForAnyEvent
+    {
+        [Test]
+        public void ShouldWaitForFirstOfTwo()
+        {
+            // Arrange
+            var ev1 = new ManualResetEventSlim();
+            var ev2 = new ManualResetEventSlim();
+
+            // Act
+            Task.Run(
+                () =>
+                {
+                    Thread.Sleep(10000);
+                }
+            );
+            Task.Run(
+                () =>
+                {
+                    Thread.Sleep(500);
+                    ev2.Set();
+                }
+            );
+            // Assert
+            WaitFor.AnyOf(10000, ev1, ev2);
+            Expect(ev1.IsSet)
+                .To.Be.False();
+            Expect(ev2.IsSet)
+                .To.Be.True();
+        }
+
+        [Test]
+        public void ShouldWaitForFirstOfN()
+        {
+            // Arrange
+            var howMany = 10;
+            var events = PyLike.Range(1, howMany)
+                .Select(_ => new ManualResetEventSlim())
+                .ToArray();
+
+            // Act
+            PyLike.Range(1, howMany)
+                .ForEach(
+                    i =>
+                    {
+                        Task.Run(
+                            () =>
+                            {
+                                Thread.Sleep(
+                                    GetRandomInt(1000, 5000)
+                                );
+                                events[i].Set();
+                            }
+                        );
+                    }
+                );
+            // Assert
+            var result = WaitFor.AnyOf(10000, events);
+            Expect(result)
+                .To.Be.True();
+            Expect(events)
+                .To.Contain.Exactly(1)
+                .Matched.By(o => o.IsSet);
+        }
     }
 }

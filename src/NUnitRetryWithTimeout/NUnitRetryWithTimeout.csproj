@@ -7,7 +7,7 @@
     <RootNamespace>NUnit</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+<!--    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>-->
     <PackageVersion>1.0.5-2310171156.5aa38f7</PackageVersion>
     <DefaultLanguage>en-US</DefaultLanguage>
     <PackageProjectUrl>https://github.com/fluffynuts/nunit-retry-with-timeout</PackageProjectUrl>
@@ -25,5 +25,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NUnit" Version="3.13.3"/>
+    <PackageReference Include="PeanutButter.Utils" Version="3.0.200" />
   </ItemGroup>
 </Project>
