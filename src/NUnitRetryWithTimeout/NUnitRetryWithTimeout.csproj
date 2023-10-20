@@ -7,7 +7,7 @@
     <RootNamespace>NUnit</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <PackageVersion>1.0.5-2310201108.39eb965</PackageVersion>
+    <PackageVersion>1.0.5-2310201159.38b2d61</PackageVersion>
     <DefaultLanguage>en-US</DefaultLanguage>
     <PackageProjectUrl>https://github.com/fluffynuts/nunit-retry-with-timeout</PackageProjectUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
