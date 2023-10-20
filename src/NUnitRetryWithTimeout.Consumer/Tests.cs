@@ -46,15 +46,13 @@ public class Tests
         return result;
     }
 
-    [RetryWithTimeout(5, 500)]
+    [RetryWithTimeout(5, 500, 10000)]
     [Test]
     public void ShouldEventuallyPassWhenSometimesSlow()
     {
         // RetryWithTimeout.EnableDebuggerBehavior = false;
-        _eventuallyPassSometimesSlowAttempt = 0;
         // Arrange
-        using var _ = new AutoLocker(_testLock);
-        Log($"{++_eventuallyPassSometimesSlowAttempt}");
+        Log($"internal attempt count: {++_eventuallyPassSometimesSlowAttempt}");
         // Act
         if (_eventuallyPassSometimesSlowAttempt < 5)
         {
@@ -76,7 +74,6 @@ public class Tests
     public void ShouldEventuallyPassWhenSometimesThrows()
     {
         // Arrange
-        using var _ = new AutoLocker(_testLock);
         Log($"{++_eventuallyPassSometimesThrowsAttempt}");
         // Act
         if (_eventuallyPassSometimesThrowsAttempt < 5)
@@ -114,7 +111,6 @@ public class Tests
     public void ShouldEventuallyFailDueToTestTimeout()
     {
         // Arrange
-        using var _ = new AutoLocker(_testLock);
         Log($"{++_failDueToIndividualTimeoutAttempt}");
         // Act
         Thread.Sleep(1000);
@@ -128,7 +124,6 @@ public class Tests
     public void ShouldEventuallyFailDueToOverallTimeout()
     {
         // Arrange
-        using var _ = new AutoLocker(_testLock);
         Log($"{++_failDueToOverallTimeoutAttempt}");
         // Act
         if (_failDueToOverallTimeoutAttempt < 5)
@@ -143,7 +138,7 @@ public class Tests
         }
 
         // Assert
-        Log($"{nameof(ShouldEventuallyFailDueToOverallTimeout)} should pass");
+        Log($"{nameof(ShouldEventuallyFailDueToOverallTimeout)} passing");
         Assert.Pass("yay");
     }
 

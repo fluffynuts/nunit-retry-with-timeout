@@ -30,10 +30,12 @@ public class Tests
         );
         StdErr = io.StandardError.ToArray();
         StdOut = io.StandardOutput.ToArray();
+        AllOutput = io.StandardOutputAndErrorInterleavedSnapshot.ToArray();
     }
 
     private string[] StdErr = Array.Empty<string>();
     private string[] StdOut = Array.Empty<string>();
+    private string[] AllOutput = Array.Empty<string>();
 
     private string FindConsumerProject()
     {
@@ -68,8 +70,9 @@ public class Tests
                 s => s.ContainsInOrder(
                     StringComparison.OrdinalIgnoreCase,
                     "passed",
-                    "FIXME" //nameof(ConsumerTests.ShouldEventuallyPassWhenSometimesSlow)
-                )
+                    nameof(ConsumerTests.ShouldEventuallyPassWhenSometimesSlow)
+                ),
+                () => $"full dump:\n{string.Join("\n", AllOutput)}"
             );
         // Assert
     }
@@ -85,7 +88,7 @@ public class Tests
                 s => s.ContainsInOrder(
                     StringComparison.OrdinalIgnoreCase,
                     "passed",
-                    "FIXME" //nameof(ConsumerTests.ShouldEventuallyPassWhenSometimesThrows)
+                    nameof(ConsumerTests.ShouldEventuallyPassWhenSometimesThrows)
                 )
             );
         // Assert

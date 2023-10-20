@@ -95,6 +95,8 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
         private readonly int _testTimeoutMilliSeconds;
         private readonly int _overallTimeoutMilliSeconds;
 
+        private bool _isChild;
+
         internal RetryWithTimeoutCommand(
             TestCommand innerCommand,
             int tryCount,
@@ -126,43 +128,51 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
         /// <returns>A TestResult</returns>
         public override TestResult Execute(TestExecutionContext context)
         {
-            Log(
-                $"Will enforce timings: {EnforceTimings} (debugger timeouts disabled: {DisableTimeoutsWhenDebugging}, debugger attached: {Debugger.IsAttached})"
-            );
             var envVar = Environment.GetEnvironmentVariable(ISOLATION_MARKER_ENVIRONMENT_VARIABLE);
             if (envVar is not null)
             {
+                _isChild = true;
+                LogDebug(
+                    $"Will enforce timings: {EnforceTimings} (debugger timeouts disabled: {DisableTimeoutsWhenDebugging}, debugger attached: {Debugger.IsAttached})"
+                );
                 Console.Error.WriteLine(envVar);
                 Console.ReadLine();
                 context.CurrentResult = innerCommand.Execute(context);
                 return context.CurrentResult;
             }
 
+            LogDebug(
+                $"Will enforce timings: {EnforceTimings} (debugger timeouts disabled: {DisableTimeoutsWhenDebugging}, debugger attached: {Debugger.IsAttached})"
+            );
+
             var count = _tryCount;
             var overallTimer = new Stopwatch();
             Exception lastException = null;
             for (var i = 0; i < count; i++)
             {
-                Log($"i :: {i}");
+                LogDebug($"i :: {i}");
                 if (i == 4)
                 {
                     DisableTimeoutsWhenDebugging = true;
                 }
 
-                if (SuccessfullyRanOnce(i + 1, context, overallTimer, out lastException))
+                context.CurrentResult = context.CurrentTest.MakeTestResult();
+                if (SuccessfullyRanOnce(i + 1, context, overallTimer, out var attemptResult, out lastException))
                 {
-                    context.CurrentResult = context.CurrentTest.MakeTestResult();
                     context.CurrentResult.RecordTestCompletion();
                     return context.CurrentResult;
                 }
 
-                Log($"Test fails or times out ({i + 1} / {count})");
+                LogInfo(
+                    $"{context.CurrentTest.Name}: Test attempt {$"{attemptResult}".ToKebabCase().Replace("-", " ")} ({i + 1} / {count})"
+                );
 
                 if (EnforceTimings && overallTimer.Elapsed.TotalMilliseconds > _overallTimeoutMilliSeconds)
                 {
-                    Log(
+                    LogDebug(
                         $"overall timout ({_overallTimeoutMilliSeconds}ms exceeded (ran for {overallTimer.Elapsed.TotalMilliseconds})"
                     );
+                    LogInfo(" ---- overall timeout exceeded - giving up ----");
                     break;
                 }
             }
@@ -199,24 +209,33 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
         // // ReSharper disable once MemberHidesStaticFromOuterClass
         // public static bool DebugInline { get; set; } = true;
 
-        private void Log(string str)
+        private static int _logIndex;
+
+        [Conditional("ENABLE_DEBUG_LOGGING")]
+        private void LogDebug(string str)
         {
-            Console.Error.WriteLine($"[{nameof(RetryWithTimeout)}] :: {str}");
+            Console.Error.WriteLine($"({++_logIndex}{(_isChild ? "*" : "")}) [{nameof(RetryWithTimeout)}] :: {str}");
+        }
+
+        private void LogInfo(string str)
+        {
+            Console.Error.WriteLine($"[{DateTime.Now}] {str}");
         }
 
         private bool SuccessfullyRanOnce(
             int attempt,
             TestExecutionContext context,
             Stopwatch overallTimer,
+            out TestAttemptResult attemptResult,
             out Exception exception
         )
         {
-            var testPasses = new ManualResetEventSlim();
-            var testFails = new ManualResetEventSlim();
-            var testProcessTimesOut = new ManualResetEventSlim();
-            var testTimesOut = new ManualResetEventSlim();
-            var logsCollected = new ManualResetEventSlim();
-            var testHasStarted = new Barrier(2);
+            using var testPasses = new ManualResetEventSlim();
+            using var testFails = new ManualResetEventSlim();
+            using var testProcessTimesOut = new ManualResetEventSlim();
+            using var testTimesOut = new ManualResetEventSlim();
+            using var logsCollected = new ManualResetEventSlim();
+            using var testHasStarted = new Barrier(2);
             var logs = new ConcurrentQueue<string>();
 
             var myTimer = new Stopwatch();
@@ -235,7 +254,6 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
             );
             // ReSharper disable once MethodSupportsCancellation
             testHasStarted.SignalAndWait();
-            object state = null;
             myTimer.Start();
             overallTimer.Start();
             var maxWait = EnforceTimings
@@ -245,43 +263,41 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
             {
                 cancellationTokenSource.Cancel();
                 overallTimer.Stop();
-                state = new
-                {
-                    testPasses = testPasses.IsSet,
-                    testFails = testFails.IsSet,
-                    testProcessTimesOut = testProcessTimesOut.IsSet,
-                    testTimesOut = testTimesOut.IsSet
-                };
-                Log($"Test timeout of {_testTimeoutMilliSeconds}ms exceeded (waited {maxWait}ms)");
+                LogDebug($"Test timeout of {_testTimeoutMilliSeconds}ms exceeded (waited {maxWait}ms)");
                 exception = new TimeoutException(
                     $"Test took more than {TimeSpan.FromMilliseconds(_testTimeoutMilliSeconds)} to run:\n{DumpLogs()}"
                 );
+                attemptResult = TestAttemptResult.TimedOut;
                 return false;
+            }
+
+            overallTimer.Stop();
+            myTimer.Stop();
+
+            cancellationTokenSource.Cancel();
+            if (testPasses.IsSet)
+            {
+                attemptResult = TestAttemptResult.Passed;
+            }
+            else if (testFails.IsSet)
+            {
+                attemptResult = TestAttemptResult.Failed;
+            }
+            else if (testTimesOut.IsSet)
+            {
+                attemptResult = TestAttemptResult.TimedOut;
             }
             else
             {
-                cancellationTokenSource.Cancel();
-                state = new
-                {
-                    testPasses = testPasses.IsSet,
-                    testFails = testFails.IsSet,
-                    testProcessTimesOut = testProcessTimesOut.IsSet,
-                    testTimesOut = testTimesOut.IsSet
-                };
+                attemptResult = TestAttemptResult.Inconclusive;
             }
 
-            myTimer.Stop();
-
-            overallTimer.Stop();
-            if (testTimesOut.IsSet || testProcessTimesOut.IsSet)
+            if (EnforceTimings && overallTimer.Elapsed.TotalMilliseconds > _overallTimeoutMilliSeconds)
             {
-                Log(
-                    $"test has exceeded runtime {_testTimeoutMilliSeconds}ms ({context.CurrentTest.Name})\n{DumpLogs()}"
+                LogInfo(
+                    $"overall time: {overallTimer.Elapsed} vs overall timeout: {TimeSpan.FromMilliseconds(_overallTimeoutMilliSeconds)}"
                 );
-            }
-            else if (EnforceTimings && overallTimer.Elapsed.TotalMilliseconds > _overallTimeoutMilliSeconds)
-            {
-                Log(
+                LogDebug(
                     $"Overall time ({overallTimer.Elapsed.TotalMilliseconds}) exceeded overall timeout of {_overallTimeoutMilliSeconds}ms\n{DumpLogs()}"
                 );
                 exception = new TimeoutException(
@@ -290,9 +306,20 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
                 return false;
             }
 
+            if (attemptResult == TestAttemptResult.TimedOut)
+            {
+                LogDebug(
+                    $"test has exceeded runtime {_testTimeoutMilliSeconds}ms ({context.CurrentTest.Name})\n{DumpLogs()}"
+                );
+                exception = new TimeoutException(
+                    $"test has exceeded runtime {_testTimeoutMilliSeconds}ms ({context.CurrentTest.Name})\n{DumpLogs()}"
+                );
+                return false;
+            }
+
             exception = null;
-            Log($"state:\n{state.Stringify()}");
-            Log($"Test passes in time! ({myTimer.Elapsed})\n{DumpLogs()}");
+            LogDebug($"state:\n{attemptResult}");
+            LogDebug($"Test passes in time (attempt: {attempt})! ({myTimer.Elapsed})\n{DumpLogs()}");
             return true;
 
             string DumpLogs()
@@ -325,6 +352,8 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
                             $"Can't find assembly info for test {context.CurrentTest.Name}"
                         );
                     }
+
+                    logs.Enqueue($"Start test attempt {attempt} for {context.CurrentTest.Name} on {asm}");
 
                     var asmLocation = new Uri(asm.Location).LocalPath;
                     var timeoutMs = EnforceTimings
@@ -362,7 +391,7 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
                     Task.Run(
                         () =>
                         {
-                            Log($"---> will auto-fail this test in {timeoutMs}ms");
+                            LogDebug($"---> will auto-fail this test in {timeoutMs}ms");
                             Thread.Sleep(timeoutMs);
                             if (cancellationToken.IsCancellationRequested)
                             {
@@ -370,7 +399,8 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
                             }
 
                             testTimesOut.Set();
-                        }, cancellationToken
+                        },
+                        cancellationToken
                     );
 
                     var exitCode = io.WaitForExit(
@@ -384,17 +414,17 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
 
                     if (exitCode is null)
                     {
-                        Log("no exit code - test process did not complete");
+                        LogDebug("no exit code - test process did not complete");
                         SetIfNotCancelled(testProcessTimesOut);
                     }
                     else if (exitCode == 0)
                     {
-                        Log("exit code 0 - test passes!");
+                        LogDebug("exit code 0 - test passes!");
                         SetIfNotCancelled(testPasses);
                     }
                     else
                     {
-                        Log("test fails");
+                        LogDebug("test fails");
                         SetIfNotCancelled(testFails);
                     }
 
@@ -417,7 +447,8 @@ public class RetryWithTimeout : NUnitAttribute, IRepeatTest
                             ev.Set();
                         }
                     }
-                }, cancellationToken
+                },
+                cancellationToken
             );
         }
 
@@ -445,16 +476,23 @@ public static class WaitFor
         params ManualResetEventSlim[] events
     )
     {
-        var mine = new ManualResetEventSlim();
+        using var mine = new ManualResetEventSlim();
         var waitResults = new List<bool>();
         var complete = false;
         var barrier = new Barrier(events.Length);
+        var cancellationTokenSource = new CancellationTokenSource();
+        var token = cancellationTokenSource.Token;
         var tasks = events.Select(
             ev => Task.Run(
                 () =>
                 {
-                    barrier.SignalAndWait();
-                    var wasSet = ev.Wait(maxTimeMilliseconds);
+                    barrier.SignalAndWait(token);
+                    var wasSet = ev.Wait(maxTimeMilliseconds, token);
+                    if (wasSet)
+                    {
+                        cancellationTokenSource.Cancel();
+                    }
+
                     lock (waitResults)
                     {
                         if (!complete)
@@ -485,4 +523,22 @@ public static class WaitFor
 
         return waitResults.Any(o => o);
     }
+}
+
+internal class LabelAttribute : Attribute
+{
+    public string Label { get; }
+
+    public LabelAttribute(string label)
+    {
+        Label = label;
+    }
+}
+
+internal enum TestAttemptResult
+{
+    Passed,
+    Failed,
+    TimedOut,
+    Inconclusive
 }
