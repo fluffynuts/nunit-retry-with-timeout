@@ -7,12 +7,13 @@
     <RootNamespace>NUnit</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
-<!--    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>-->
-    <PackageVersion>1.0.5-2310171156.5aa38f7</PackageVersion>
+    <PackageVersion>1.0.5-2310201108.39eb965</PackageVersion>
     <DefaultLanguage>en-US</DefaultLanguage>
     <PackageProjectUrl>https://github.com/fluffynuts/nunit-retry-with-timeout</PackageProjectUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Copyright>Copyright 2023</Copyright>
+    <DefineConstants>$(DefineConstants);BUILD_PEANUTBUTTER_INTERNAL</DefineConstants>
     <Authors>
       Davyd McColl
     </Authors>
@@ -25,6 +26,31 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NUnit" Version="3.13.3"/>
-    <PackageReference Include="PeanutButter.Utils" Version="3.0.200" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\PeanutButter\source\Utils\PeanutButter.Utils\ByteArrayExtensions.cs">
+      <Link>Imported\ByteArrayExtensions.cs</Link>
+    </Compile>
+    <Compile Include="..\PeanutButter\source\Utils\PeanutButter.Utils\CannotZipNullException.cs">
+      <Link>Imported\CannotZipNullException.cs</Link>
+    </Compile>
+    <Compile Include="..\PeanutButter\source\Utils\PeanutButter.Utils\DictionaryExtensions.cs">
+      <Link>Imported\DictionaryExtensions.cs</Link>
+    </Compile>
+    <Compile Include="..\PeanutButter\source\Utils\PeanutButter.Utils\ExtensionsForIEnumerables.cs">
+      <Link>Imported\ExtensionsForIEnumerables.cs</Link>
+    </Compile>
+    <Compile Include="..\PeanutButter\source\Utils\PeanutButter.Utils\ProcessIO.cs">
+      <Link>Imported\ProcessIO.cs</Link>
+    </Compile>
+    <Compile Include="..\PeanutButter\source\Utils\PeanutButter.Utils\RandomNumber.cs">
+      <Link>Imported\RandomNumber.cs</Link>
+    </Compile>
+    <Compile Include="..\PeanutButter\source\Utils\PeanutButter.Utils\StringExtensions.cs">
+      <Link>Imported\StringExtensions.cs</Link>
+    </Compile>
+    <Compile Include="..\PeanutButter\source\Utils\PeanutButter.Utils\UnevenZipException.cs">
+      <Link>Imported\UnevenZipException.cs</Link>
+    </Compile>
   </ItemGroup>
 </Project>
